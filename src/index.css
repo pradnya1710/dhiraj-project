@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === Print & PDF Fixes === */
+
+/* Make sure backgrounds print in browser Print dialogs */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+@layer components {
+  .input {
+    @apply border rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400;
+  }
+}
+
+/* === PDF Table & Section Formatting === */
+
+/* Prevent page breaks inside important blocks */
+.page-break-avoid {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* Force section to always start on a new page */
+.page-break {
+  page-break-before: always;
+  break-before: page;
+}
+
+/* Table formatting */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+  page-break-inside: auto;
+  break-inside: auto;
+}
+
+thead {
+  display: table-header-group; /* Repeat table header on new page */
+}
+
+tfoot {
+  display: table-footer-group; /* Keep footer consistent */
+}
+
+tr, td, th {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+  page-break-after: auto;
+}
+
+/* Section card wrapper */
+.section-card {
+  page-break-inside: avoid;
+  break-inside: avoid;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
