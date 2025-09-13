@@ -1,5 +1,4 @@
-// src/Page5.jsx
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
 // Helper to format INR
 const fmtINR = (n) =>
@@ -7,11 +6,15 @@ const fmtINR = (n) =>
   (Number(n || 0)).toLocaleString("en-IN", { maximumFractionDigits: 0 });
 
 export default function Page5({ form, handleChange, setForm }) {
+  // Local state so we only sync liabilities when user edits them here
+  const [liabilitiesTouched, setLiabilitiesTouched] = useState(false);
+
   // --- Calculations (derived values) ---
+  // totalPhysicalInvestment (this field kept for backward compatibility if used elsewhere)
   const totalPhysicalInvestment = Number(form.physicalInvestment || 0);
   const totalPhysicalCurrent = Number(form.physicalCurrent || 0);
 
-  // Annual fields (these will be filled automatically by useEffect below)
+  // Annual fields for insurance (these are still used for insurance specifically)
   const annualInsuranceInvestment =
     Number(form.endowmentAnnual || 0) +
     Number(form.moneybackAnnual || 0) +
@@ -22,56 +25,72 @@ export default function Page5({ form, handleChange, setForm }) {
     Number(form.moneybackCurrent || 0) +
     Number(form.ulipCurrent || 0);
 
+  // NOTE: use distinct keys for outstanding amounts to avoid collisions with monthly/EMI fields.
+  // These are the keys used by inputs in this file:
+  // vehicleLoanOutstanding, personalLoanOutstanding, consumerLoanOutstanding,
+  // homeLoanOutstanding, creditCardOutstanding, otherLoanOutstanding
   const totalLiabilities =
-    Number(form.vehicleLoan || 0) +
-    Number(form.personalLoan || 0) +
-    Number(form.consumerLoan || 0) +
-    Number(form.homeLoan || 0) +
-    Number(form.creditCard || 0) +
-    Number(form.otherLoan || 0);
+    Number(form.vehicleLoanOutstanding || 0) +
+    Number(form.personalLoanOutstanding || 0) +
+    Number(form.consumerLoanOutstanding || 0) +
+    Number(form.homeLoanOutstanding || 0) +
+    Number(form.creditCardOutstanding || 0) +
+    Number(form.otherLoanOutstanding || 0);
 
-  const totalInvestmentValue = totalPhysicalInvestment + annualInsuranceInvestment;
-
-  const totalCurrentInvestment = totalPhysicalCurrent + currentInsuranceValue;
-
-  // ✅ Push liabilities into form so Page6 can use them
-  useEffect(() => {
-    setForm((prev) => {
-      // Only update if different to avoid unnecessary renders
-      if (Number(prev.liabilitiesTotal || 0) === Number(totalLiabilities || 0)) {
-        return prev;
+  // -------------------------
+  // Grand totals across the entire form
+  // Sum all annual* and current* fields (supports both underscore and camelCase variants)
+  // -------------------------
+  const sumFormByPattern = (pattern) => {
+    if (!form || typeof form !== "object") return 0;
+    const keys = Object.keys(form);
+    return keys.reduce((acc, k) => {
+      if (pattern.test(k)) {
+        const v = Number(form[k] || 0);
+        if (!Number.isNaN(v)) return acc + v;
       }
+      return acc;
+    }, 0);
+  };
+
+  // regex for annual keys: matches "..._annual", "...Annual", "...annual"
+  const annualPattern = /(_?annual|Annual)$/;
+  // regex for current keys: matches "..._current", "...Current", "...current"
+  const currentPattern = /(_?current|Current)$/;
+
+  const totalAnnualAcrossAll = sumFormByPattern(annualPattern);
+  const totalCurrentAcrossAll = sumFormByPattern(currentPattern);
+
+  // Also provide backwards-compatible "totalInvestmentValue" used earlier: use totalAnnualAcrossAll
+  const totalInvestmentValue = totalAnnualAcrossAll;
+  const totalCurrentInvestment = totalCurrentAcrossAll;
+
+  // Push liabilitiesTotal into form only when user edited liabilities on this page
+  useEffect(() => {
+    if (!liabilitiesTouched) return;
+
+    setForm((prev) => {
+      const prevVal = Number(prev.liabilitiesTotal || 0);
+      if (prevVal === Number(totalLiabilities || 0)) return prev;
       return {
         ...prev,
         liabilitiesTotal: totalLiabilities,
       };
     });
-  }, [totalLiabilities, setForm]);
+  }, [totalLiabilities, setForm, liabilitiesTouched]);
 
   // Auto-calculate policy annual amounts based on Investment + Frequency
   useEffect(() => {
     const computeAnnual = (investment, freq) => {
       const inv = Number(investment || 0);
-      // Match the select option strings you're using exactly:
-      switch ((freq || "").toLowerCase()) {
-        case "monthly":
-          return inv * 12;
-        case "quarterly":
-          return inv * 4;
-        case "half yearly":
-          return inv * 2;
-        case "single yearly":
-          return inv;
-        // accept some tolerant variants too
-        case "half-yearly":
-        case "halfyearly":
-          return inv * 2;
-        case "yearly":
-        case "annual":
-          return inv;
-        default:
-          return 0;
-      }
+      const f = (freq || "").toString().toLowerCase().replace(/\s+/g, "");
+      // Single (one-time) -> annual contribution should be 0
+      if (f.includes("single")) return 0;
+      if (f.includes("monthly")) return inv * 12;
+      if (f.includes("quarter")) return inv * 4;
+      if (f.includes("half")) return inv * 2;
+      if (f.includes("year") || f.includes("annual")) return inv;
+      return 0;
     };
 
     const endowmentAnnualCalc = computeAnnual(
@@ -84,7 +103,6 @@ export default function Page5({ form, handleChange, setForm }) {
     );
     const ulipAnnualCalc = computeAnnual(form.ulipInvestment, form.ulipFreq);
 
-    // Only update if any computed annual differs from stored value
     const needUpdate =
       Number(form.endowmentAnnual || 0) !== endowmentAnnualCalc ||
       Number(form.moneybackAnnual || 0) !== moneybackAnnualCalc ||
@@ -111,7 +129,7 @@ export default function Page5({ form, handleChange, setForm }) {
     setForm,
   ]);
 
-  // Also store totalInvestmentValue in form so other pages can use it
+  // Also store totalInvestmentValue in form so other pages can use it (keeps compatibility)
   useEffect(() => {
     setForm((prev) => {
       const prevTotal = Number(prev.totalInvestmentValue || 0);
@@ -127,6 +145,13 @@ export default function Page5({ form, handleChange, setForm }) {
     form.moneybackAnnual,
     form.ulipAnnual,
   ]);
+
+  // Wrapper onChange for liabilities inputs so we mark that liabilities were edited here
+  const handleLiabilityChange = (e) => {
+    setLiabilitiesTouched(true);
+    // We forward the event — parent handleChange should update form[key] appropriately.
+    handleChange(e);
+  };
 
   return (
     <div className="space-y-6">
@@ -170,8 +195,9 @@ export default function Page5({ form, handleChange, setForm }) {
                       <option value="">Select</option>
                       <option value="Monthly">Monthly</option>
                       <option value="Quarterly">Quarterly</option>
-                      <option value="Single Yearly">Single Yearly</option>
                       <option value="Half Yearly">Half Yearly</option>
+                      <option value="Yearly">Yearly</option>
+                      <option value="Single">Single</option>
                     </select>
                   </td>
 
@@ -185,15 +211,16 @@ export default function Page5({ form, handleChange, setForm }) {
                     />
                   </td>
                   <td className="border p-2">
-                    {/* Annual is computed automatically — show as readOnly so users can't accidentally diverge */}
                     <input
                       type="number"
                       name={`${key}Annual`}
-                      value={form[`${key}Annual`] !== undefined ? form[`${key}Annual`] : ""}
+                      value={
+                        form[`${key}Annual`] !== undefined ? form[`${key}Annual`] : ""
+                      }
                       readOnly
-                      onChange={handleChange} // harmless if readOnly
+                      onChange={handleChange}
                       className="w-full border rounded p-1 bg-gray-50"
-                      title="Automatically computed from Investment × Frequency"
+                      title="Automatically computed from Investment × Frequency (Single = one-time → 0)"
                     />
                   </td>
                 </tr>
@@ -225,13 +252,13 @@ export default function Page5({ form, handleChange, setForm }) {
         <h2 className="font-semibold text-lg mb-3">Grand Total Summary</h2>
         <div className="grid grid-cols-2 gap-4">
           <SummaryCard
-            label="Total Annual Investment Value"
-            value={fmtINR(totalInvestmentValue)}
+            label="Total Annual Investment Value (All Assets)"
+            value={fmtINR(totalAnnualAcrossAll)}
             color="bg-blue-700"
           />
           <SummaryCard
-            label="Total Current Value of Investments"
-            value={fmtINR(totalCurrentInvestment)}
+            label="Total Current Value of Investments (All Assets)"
+            value={fmtINR(totalCurrentAcrossAll)}
             color="bg-blue-800"
           />
         </div>
@@ -245,18 +272,18 @@ export default function Page5({ form, handleChange, setForm }) {
             <thead className="bg-gray-100">
               <tr>
                 <th className="border p-2 text-left">Category</th>
-                <th className="border p-2 text-left">Amount in Rs.</th>
+                <th className="border p-2 text-left">Outstanding Amount (₹)</th>
                 <th className="border p-2 text-left">Closure Year</th>
               </tr>
             </thead>
             <tbody>
               {[
-                { key: "vehicleLoan", label: "Total Outstanding Vehicle Loan" },
-                { key: "personalLoan", label: "Total Outstanding Personal Loan" },
-                { key: "consumerLoan", label: "Total Outstanding Consumer Loan" },
-                { key: "homeLoan", label: "Total Outstanding Home Loan" },
-                { key: "creditCard", label: "Total Outstanding Credit Card Due" },
-                { key: "otherLoan", label: "Total Outstanding (Others)" },
+                { key: "vehicleLoanOutstanding", label: "Total Outstanding Vehicle Loan" },
+                { key: "personalLoanOutstanding", label: "Total Outstanding Personal Loan" },
+                { key: "consumerLoanOutstanding", label: "Total Outstanding Consumer Loan" },
+                { key: "homeLoanOutstanding", label: "Total Outstanding Home Loan" },
+                { key: "creditCardOutstanding", label: "Total Outstanding Credit Card Due" },
+                { key: "otherLoanOutstanding", label: "Total Outstanding (Others)" },
               ].map((item) => (
                 <tr key={item.key}>
                   <td className="border p-2">{item.label}</td>
@@ -265,7 +292,8 @@ export default function Page5({ form, handleChange, setForm }) {
                       type="number"
                       name={item.key}
                       value={form[item.key] || ""}
-                      onChange={handleChange}
+                      // Use wrapper that marks liabilities as edited from this page
+                      onChange={handleLiabilityChange}
                       className="w-full border rounded p-1"
                     />
                   </td>
@@ -274,7 +302,7 @@ export default function Page5({ form, handleChange, setForm }) {
                       type="text"
                       name={`${item.key}Year`}
                       value={form[`${item.key}Year`] || ""}
-                      onChange={handleChange}
+                      onChange={handleLiabilityChange}
                       className="w-full border rounded p-1"
                       placeholder="Year"
                     />
@@ -289,6 +317,13 @@ export default function Page5({ form, handleChange, setForm }) {
             <span>Total Liabilities</span>
             <span>{fmtINR(totalLiabilities)}</span>
           </div>
+
+          {!liabilitiesTouched && (
+            <div className="text-sm text-gray-600 mt-2">
+              Tip: Outstanding fields here use distinct keys (e.g. <code>vehicleLoanOutstanding</code>) to avoid collision
+              with monthly EMI / income keys used elsewhere.
+            </div>
+          )}
         </div>
       </div>
 

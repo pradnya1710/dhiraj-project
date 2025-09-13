@@ -1,4 +1,3 @@
-// src/components/AssetsInvestments.jsx
 import React, { useEffect } from "react";
 
 /**
@@ -45,7 +44,7 @@ export default function AssetsInvestments({ form, handleChange, setForm }) {
     { value: "Quarterly", label: "Quarterly" },
     { value: "Half Yearly", label: "Half Yearly" },
     { value: "Yearly", label: "Yearly" },
-    { value: "Single Yearly", label: "Single Yearly" },
+    { value: "Single", label: "Single" }, // changed to Single
   ];
 
   // -------------------------
@@ -55,11 +54,13 @@ export default function AssetsInvestments({ form, handleChange, setForm }) {
     const v = Number(value || 0);
     if (!freq) return 0;
     const f = String(freq).toLowerCase().replace(/\s+/g, "");
+    // Single = one-time => annual contribution should be 0
+    if (f.includes("single")) return 0;
     if (f.includes("monthly")) return Math.round(v * 12);
     if (f.includes("quarter")) return Math.round(v * 4);
     if (f.includes("half")) return Math.round(v * 2);
-    if (f.includes("year") || f.includes("single") || f.includes("annual"))
-      return Math.round(v);
+    // yearly / annual = the value itself as annual
+    if (f.includes("year") || f.includes("annual")) return Math.round(v);
     // if freq is a number (months), convert to yearly multiplier
     const asNum = Number(freq);
     if (!Number.isNaN(asNum) && asNum > 0) {
@@ -180,21 +181,13 @@ export default function AssetsInvestments({ form, handleChange, setForm }) {
 
     // display tolerant values (fall back to camelCase if present)
     const displayedValue =
-      form?.[valueName] ??
-      form?.[`${row.key}Value`] ??
-      ""; /* keep input controlled */
+      form?.[valueName] ?? form?.[`${row.key}Value`] ?? ""; /* keep input controlled */
     const displayedFreq =
-      form?.[freqName] ??
-      form?.[`${row.key}Freq`] ??
-      "";
+      form?.[freqName] ?? form?.[`${row.key}Freq`] ?? "";
     const displayedCurrent =
-      form?.[currentName] ??
-      form?.[`${row.key}Current`] ??
-      "";
+      form?.[currentName] ?? form?.[`${row.key}Current`] ?? "";
     const displayedAnnual =
-      form?.[annualName] ??
-      form?.[`${row.key}Annual`] ??
-      "";
+      form?.[annualName] ?? form?.[`${row.key}Annual`] ?? "";
 
     return (
       <div key={row.key} className="grid grid-cols-12 gap-2 items-center">
@@ -251,7 +244,7 @@ export default function AssetsInvestments({ form, handleChange, setForm }) {
             onChange={handleChange}
             className="input mt-1 w-full border rounded px-2 py-1 text-sm bg-gray-50"
             placeholder="Annual Value"
-            title="Automatically computed from Investment × Frequency"
+            title="Automatically computed from Investment × Frequency (Single = one-time → 0)"
           />
         </div>
       </div>
