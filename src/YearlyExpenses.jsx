@@ -37,7 +37,9 @@ export default function YearlyExpenses({ form, handleChange }) {
   );
 
   return (
+    
     <div className="max-w-4xl mx-auto bg-white shadow-lg rounded-2xl p-6 mt-6">
+       <div className="page-break"></div>
       <h2 className="text-xl font-bold mb-4">Yearly Expenses</h2>
 
       {/* Insurance Expenses */}
@@ -105,11 +107,11 @@ export default function YearlyExpenses({ form, handleChange }) {
           </div>
         </div>
       </div>
-<div className="page-break"></div>
+
 
 {/* Children's Education */}
 <div className="mb-6 border rounded-lg p-4 ">
-
+  <div className="page-break"></div>
   <h3 className="font-semibold mb-3 text-black">
     Children's Education Expenses
   </h3>

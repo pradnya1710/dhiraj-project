@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";   // ✅ import useRef
+// src/App.jsx
+import { useState, useRef, useEffect } from "react"; // added useEffect
 import html2pdf from "html2pdf.js/dist/html2pdf.bundle.min";
 import YearlyExpenses from "./YearlyExpenses.jsx";
 import AssetsInvestments from "./AssetsInvestments.jsx";
@@ -14,6 +15,10 @@ export default function App() {
     email: "",
     profession: "",
     maritalStatus: "",
+    // spouse fields (new)
+    spouseName: "",
+    spouseDob: "",
+
     child1Name: "",
     child1Dob: "",
     child2Name: "",
@@ -24,6 +29,8 @@ export default function App() {
     fatherDob: "",
     motherName: "",
     motherDob: "",
+
+    // incomes raw value and frequency + computed annual amount
     salary: "",
     salaryFreq: "",
     salaryAmt: "",
@@ -36,6 +43,8 @@ export default function App() {
     other: "",
     otherFreq: "",
     otherAmt: "",
+
+    // ... rest of fields unchanged
     consumerLoan: "",
     vehicleLoan: "",
     personalLoan: "",
@@ -168,18 +177,16 @@ export default function App() {
     coverage_term_sum: "",
   });
 
+  // Standard handleChange used across components
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  // ✅ PDF Ref
+  // PDF ref & generator
   const pdfRef = useRef();
-
-  // ✅ PDF Download Function
   const handleDownloadPDF = () => {
     const element = pdfRef.current;
-
     const opt = {
       margin: 0.3,
       filename: "Financial_Report.pdf",
@@ -187,15 +194,74 @@ export default function App() {
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
     };
-
     html2pdf().set(opt).from(element).save();
   };
 
-  // ✅ Calculate summaries
-  const totalAnnualIncome = ["salaryAmt", "rentAmt", "investAmt", "otherAmt"].reduce(
-    (acc, key) => acc + Number(form[key] || 0),
-    0
-  );
+  // ---------------------------
+  // Auto-calc income annual amounts
+  // ---------------------------
+  // Utility: get multiplier from frequency
+  const freqMultiplier = (freq) => {
+    if (!freq) return 0;
+    const f = String(freq).toLowerCase().replace(/\s+/g, "");
+    if (f.includes("monthly")) return 12;
+    if (f.includes("quarter")) return 4;
+    if (f.includes("half")) return 2;
+    if (f.includes("year") || f.includes("single") || f.includes("annual"))
+      return 1;
+    // fallback: if freq is numeric months like "3" meaning every 3 months -> annual multiplier = 12 / 3 = 4
+    const asNum = Number(freq);
+    if (!Number.isNaN(asNum) && asNum > 0) return 12 / asNum;
+    return 0;
+  };
+
+  // When the raw income amount or its frequency changes, compute the corresponding annual amount
+  useEffect(() => {
+    // prefixes we manage
+    const incomes = ["salary", "rent", "invest", "other"];
+    const updates = {};
+    let any = false;
+
+    incomes.forEach((p) => {
+      const raw = form[p];
+      const freq = form[`${p}Freq`];
+      const multiplier = freqMultiplier(freq);
+      const numeric = Number(raw || 0);
+      const computed = Math.round(numeric * multiplier);
+
+      const key = `${p}Amt`;
+      // only set if different (avoid cycles)
+      if (Number(form[key] || 0) !== computed) {
+        updates[key] = computed;
+        any = true;
+      }
+    });
+
+    if (any) {
+      setForm((prev) => ({ ...prev, ...updates }));
+    }
+    // We want this effect to run when any of these fields change:
+    // (explicit dependencies help avoid stale closures)
+  }, [
+    form.salary,
+    form.salaryFreq,
+    form.rent,
+    form.rentFreq,
+    form.invest,
+    form.investFreq,
+    form.other,
+    form.otherFreq,
+    setForm,
+  ]);
+
+  // ---------------------------
+  // Derived totals (display-only)
+  // ---------------------------
+  const totalAnnualIncome =
+    Number(form.salaryAmt || 0) +
+    Number(form.rentAmt || 0) +
+    Number(form.investAmt || 0) +
+    Number(form.otherAmt || 0);
 
   const totalMonthlyExpenses = [
     "consumerLoan",
@@ -223,6 +289,21 @@ export default function App() {
   ].reduce((acc, key) => acc + Number(form[key] || 0), 0);
 
   const totalAnnualExpenses = totalMonthlyExpenses * 12;
+
+  // Optionally, you may want to write these totals into form if other pages expect them
+  // e.g. setForm(prev => ({...prev, totalAnnualIncome, totalMonthlyExpenses, totalAnnualExpenses}))
+  // but not doing it automatically here to avoid overwriting if you need to persist differently.
+  // If you want them in form, uncomment the useEffect below:
+  /*
+  useEffect(() => {
+    setForm(prev => ({
+      ...prev,
+      totalAnnualIncome,
+      totalMonthlyExpenses,
+      totalAnnualExpenses
+    }));
+  }, [totalAnnualIncome, totalMonthlyExpenses, totalAnnualExpenses, setForm]);
+  */
 
   return (
     <div ref={pdfRef}>
@@ -285,6 +366,26 @@ export default function App() {
                 options={["Single", "Married", "Divorced", "Widowed"]}
               />
             </div>
+
+            {/* Show spouse fields when Married */}
+            {form.maritalStatus === "Married" && (
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Input
+                  label="Spouse Name"
+                  name="spouseName"
+                  value={form.spouseName}
+                  onChange={handleChange}
+                />
+                <Input
+                  type="date"
+                  label="Spouse Date of Birth"
+                  name="spouseDob"
+                  value={form.spouseDob}
+                  onChange={handleChange}
+                />
+                {/* optional: spouse profession or contact if needed */}
+              </div>
+            )}
           </Section>
 
           {/* Children Information */}
@@ -369,10 +470,11 @@ export default function App() {
           <div className="page-break"></div>
           <div className="section-card page-break-avoid">
             <Section title="Age Summary">
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-center">
-                <AgeCard label="Your Age"   dob={form.dob}        color="bg-blue-500" />
-                <AgeCard label="Father Age" dob={form.fatherDob}  color="bg-indigo-500" />
-                <AgeCard label="Mother Age" dob={form.motherDob}  color="bg-red-500" />
+              <div className="grid grid-cols-2 md:grid-cols-7 gap-3 text-center">
+                <AgeCard label="Your Age" dob={form.dob} color="bg-blue-500" />
+                <AgeCard label="Spouse Age" dob={form.spouseDob} color="bg-teal-500" />
+                <AgeCard label="Father Age" dob={form.fatherDob} color="bg-indigo-500" />
+                <AgeCard label="Mother Age" dob={form.motherDob} color="bg-red-500" />
                 <AgeCard label="Child 1 Age" dob={form.child1Dob} color="bg-pink-500" />
                 <AgeCard label="Child 2 Age" dob={form.child2Dob} color="bg-green-500" />
                 <AgeCard label="Child 3 Age" dob={form.child3Dob} color="bg-orange-500" />
@@ -386,7 +488,6 @@ export default function App() {
               <IncomeRow
                 label="Salary/Business Income"
                 prefix="salary"
-                placeholder="Enter Amount"
                 form={form}
                 handleChange={handleChange}
               />
@@ -396,19 +497,16 @@ export default function App() {
                 form={form}
                 handleChange={handleChange}
               />
+               <div className="page-break"></div>
               <IncomeRow
                 label="Investment Income"
                 prefix="invest"
                 form={form}
                 handleChange={handleChange}
               />
-              <IncomeRow
-                label="Others"
-                prefix="other"
-                form={form}
-                handleChange={handleChange}
-              />
+              <IncomeRow label="Others" prefix="other" form={form} handleChange={handleChange} />
             </div>
+
             <div className="bg-green-600 text-white text-left font-semibold rounded-lg p-3 mt-4">
               Total Annual Income ₹ {totalAnnualIncome}
             </div>
@@ -417,7 +515,7 @@ export default function App() {
           {/* Monthly Expenses */}
           <Section title="Monthly Expenses">
             {/* Loans */}
-            <SubSection title="Loans" >
+            <SubSection title="Loans">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
                   label="Consumer Loan EMI"
@@ -447,141 +545,49 @@ export default function App() {
             </SubSection>
 
             {/* Household */}
-            <SubSection title="Household Expenses" >
+            <SubSection title="Household Expenses">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Input
-                  label="Grocery, Vegetables, Fruits"
-                  name="grocery"
-                  value={form.grocery}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Domestic Help"
-                  name="domesticHelp"
-                  value={form.domesticHelp}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Piped Gas Bill"
-                  name="gas"
-                  value={form.gas}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Electricity Bill"
-                  name="electricity"
-                  value={form.electricity}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Telephone / WiFi Bill"
-                  name="wifi"
-                  value={form.wifi}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Miscellaneous Expenses"
-                  name="miscHouse"
-                  value={form.miscHouse}
-                  onChange={handleChange}
-                />
+                <Input label="Grocery, Vegetables, Fruits" name="grocery" value={form.grocery} onChange={handleChange} />
+                <Input label="Domestic Help" name="domesticHelp" value={form.domesticHelp} onChange={handleChange} />
+                <Input label="Piped Gas Bill" name="gas" value={form.gas} onChange={handleChange} />
+                <Input label="Electricity Bill" name="electricity" value={form.electricity} onChange={handleChange} />
+                <Input label="Telephone / WiFi Bill" name="wifi" value={form.wifi} onChange={handleChange} />
+                <Input label="Miscellaneous Expenses" name="miscHouse" value={form.miscHouse} onChange={handleChange} />
               </div>
             </SubSection>
 
             {/* Property */}
-            <SubSection title="Property Related" >
+            <SubSection title="Property Related">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input
-                  label="Rent Payable"
-                  name="rentPayable"
-                  value={form.rentPayable}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Property Maintenance"
-                  name="propertyMaint"
-                  value={form.propertyMaint}
-                  onChange={handleChange}
-                />
+                <Input label="Rent Payable" name="rentPayable" value={form.rentPayable} onChange={handleChange} />
+                <Input label="Property Maintenance" name="propertyMaint" value={form.propertyMaint} onChange={handleChange} />
               </div>
             </SubSection>
 
             {/* Discretionary */}
-            <SubSection title="Discretionary Expenses" >
+            <SubSection title="Discretionary Expenses">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Input
-                  label="Fuel"
-                  name="fuel"
-                  value={form.fuel}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Hotel & Hospitality"
-                  name="hotel"
-                  value={form.hotel}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="OTT Subscriptions"
-                  name="ott"
-                  value={form.ott}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Club Memberships"
-                  name="club"
-                  value={form.club}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Entertainment"
-                  name="entertainment"
-                  value={form.entertainment}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Miscellaneous Expenses"
-                  name="miscDisc"
-                  value={form.miscDisc}
-                  onChange={handleChange}
-                />
+                <Input label="Fuel" name="fuel" value={form.fuel} onChange={handleChange} />
+                <Input label="Hotel & Hospitality" name="hotel" value={form.hotel} onChange={handleChange} />
+                <Input label="OTT Subscriptions" name="ott" value={form.ott} onChange={handleChange} />
+                <Input label="Club Memberships" name="club" value={form.club} onChange={handleChange} />
+                <Input label="Entertainment" name="entertainment" value={form.entertainment} onChange={handleChange} />
+                <Input label="Miscellaneous Expenses" name="miscDisc" value={form.miscDisc} onChange={handleChange} />
               </div>
             </SubSection>
 
             {/* Children */}
-            <SubSection title="Children's Education Expenses" >
+            <SubSection title="Children's Education Expenses">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Input
-                  label="Classes Fees / Tuition Fees"
-                  name="school"
-                  value={form.school}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Extra Curricular Activities Fees"
-                  name="extraCurricular"
-                  value={form.extraCurricular}
-                  onChange={handleChange}
-                />
-                <Input
-                  label="Miscellaneous Expenses"
-                  name="miscEdu"
-                  value={form.miscEdu}
-                  onChange={handleChange}
-                />
+                <Input label="Classes Fees / Tuition Fees" name="school" value={form.school} onChange={handleChange} />
+                <Input label="Extra Curricular Activities Fees" name="extraCurricular" value={form.extraCurricular} onChange={handleChange} />
+                <Input label="Miscellaneous Expenses" name="miscEdu" value={form.miscEdu} onChange={handleChange} />
               </div>
             </SubSection>
 
             {/* Investments */}
-            <SubSection
-              title="Total Monthly Mode Investments"
-            >
-              <Input
-                label="Investment Expenses"
-                name="investExpense"
-                value={form.investExpense}
-                onChange={handleChange}
-              />
+            <SubSection title="Total Monthly Mode Investments">
+              <Input label="Investment Expenses" name="investExpense" value={form.investExpense} onChange={handleChange} />
             </SubSection>
 
             {/* Totals */}
@@ -595,9 +601,10 @@ export default function App() {
             </div>
           </Section>
 
-          {/* All form components including Page7 */}
+          {/* Other components */}
           <YearlyExpenses form={form} handleChange={handleChange} />
-          <AssetsInvestments form={form} handleChange={handleChange} />
+          {/* pass setForm to AssetsInvestments so it can batch write annuals */}
+          <AssetsInvestments form={form} handleChange={handleChange} setForm={setForm} />
           <Page5 form={form} handleChange={handleChange} setForm={setForm} />
           <Page6 form={form} setForm={setForm} />
 
@@ -680,7 +687,7 @@ function AgeCard({ label, dob, color }) {
 // SubSection component
 function SubSection({ title, color, children }) {
   return (
-    <div className={`${color} rounded-lg p-3 mb-4`}>
+    <div className={`${color || ""} rounded-lg p-3 mb-4`}>
       <h5 className="font-medium mb-2">{title}</h5>
       {children}
     </div>

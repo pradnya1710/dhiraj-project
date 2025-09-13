@@ -155,6 +155,7 @@ const Page6 = ({ form, setForm }) => {
                 <option>Marriage</option>
                 <option>Retirement</option>
                 <option>Vacation</option>
+                <option>Other</option>
               </select>
               <input
                 type="number"
