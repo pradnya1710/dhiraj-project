@@ -82,13 +82,13 @@ const Page6 = ({ form, setForm }) => {
     "yearlyInvestment",
   ].reduce((acc, key) => acc + Number(form[key] || 0), 0);
 
-    const totalLiabilities = Number(form.liabilitiesTotal || 0);
+  // Read liabilities from form (kept for other pages), but DO NOT include it in totalExpenses
+  const totalLiabilities = Number(form.liabilitiesTotal || 0);
 
-
-  // ✅ Totals
+  // ✅ Totals (liabilities intentionally NOT included)
   const totalIncome =
     salaryIncome + rentIncome + investmentIncome + otherIncome;
-  const totalExpenses = monthlyExpenses * 12 + annualExpenses + totalLiabilities;
+  const totalExpenses = monthlyExpenses * 12 + annualExpenses;
   const investibleSurplus = totalIncome - totalExpenses;
 
   // ✅ Push values into form (so Page7 or summary can use them)
@@ -98,7 +98,7 @@ const Page6 = ({ form, setForm }) => {
       totalIncome,
       totalExpenses,
       investibleSurplus,
-      liabilitiesTotal: totalLiabilities,
+      liabilitiesTotal: totalLiabilities, // kept for reference, not part of expenses
     }));
   }, [totalIncome, totalExpenses, investibleSurplus, totalLiabilities, setForm]);
 
@@ -117,15 +117,15 @@ const Page6 = ({ form, setForm }) => {
           Marriage, Vacation, Retirement, etc.
         </div>
 
-          {/* ---- Table Header ---- */}
-          <div className="grid grid-cols-6 gap-3 font-semibold text-gray-600 border-b pb-2 text-sm">
-            <div>Goal Name</div>
-            <div>Goal Category</div>
-            <div>Target Amount (Rs.)</div>
-            <div>Years to Achieve</div>
-            <div>Priority</div>
-            <div>Action</div>
-          </div>
+        {/* ---- Table Header ---- */}
+        <div className="grid grid-cols-6 gap-3 font-semibold text-gray-600 border-b pb-2 text-sm">
+          <div>Goal Name</div>
+          <div>Goal Category</div>
+          <div>Target Amount (Rs.)</div>
+          <div>Years to Achieve</div>
+          <div>Priority</div>
+          <div>Action</div>
+        </div>
 
         <div className="space-y-3">
           {goals.map((goal, index) => (
@@ -272,12 +272,11 @@ const Page6 = ({ form, setForm }) => {
                 <td className="p-2">Total Annual Expenses</td>
                 <td className="p-2 text-right">{fmtINR(annualExpenses)}</td>
               </tr>
-              <tr>
-                <td className="p-2">Liabilities (Loans etc.)</td>
-                <td className="p-2 text-right">{fmtINR(totalLiabilities)}</td>
-              </tr>
+
+              {/* Liabilities removed from Expense Categories as requested */}
+
               <tr className="bg-red-50 font-semibold">
-                <td className="p-2">Total Annual Expenses (incl. Liabilities)</td>
+                <td className="p-2">Total Annual Expenses</td>
                 <td className="p-2 text-right">{fmtINR(totalExpenses)}</td>
               </tr>
             </tbody>
